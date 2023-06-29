@@ -8,7 +8,7 @@ title: API Documentation (v1.1.23)
 
 This API allows clients to send requests for labeling services by Humans in the Loop.
 
-* TODO
+* Table of Contents
 {:toc}
 
 ## Nomenclature
