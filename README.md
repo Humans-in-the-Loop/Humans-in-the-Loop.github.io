@@ -1,2 +1,3 @@
-# Humans-in-the-Loop.github.io
-HITL Platform API Documentation
+# HITL Platform API Documentation
+
+To keep this documentation up to date, please update `index.md` file.

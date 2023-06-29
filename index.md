@@ -1,0 +1,305 @@
+---
+# Feel free to add content and custom Front Matter to this file.
+# To modify the layout, see https://jekyllrb.com/docs/themes/#overriding-theme-defaults
+
+layout: home
+---
+
+# API Documentation (v1.1.23)
+
+This API allows clients to send requests for labeling services by Humans in the Loop.
+
+* TODO
+{:toc}
+
+## Nomenclature
+
+The API works with the following nomenclature for entities:
+
+### Account
+
+Each client has an account. Accounts are used for analytics and billing for services. An account is created only by a Humans in the Loop administrator. Each account can have multiple _projects_.
+
+Each account has a unique API key that allows clients to authenticate to the API. If necessary, an API key can be changed. This can be done by a Humans in the Loop administrator.
+
+### Project
+
+A project represents a body of similar labeling work. Each project has a file with instructions that is used for explaining to the human workers how to solve a _job_ from this project. Each project can have multiple _jobs_. A project can belong to only one _account_.
+
+### Job
+
+A job represents a single labeling task (for example, one image for annotation). Each job has an image file that will be labeled by human workers. A job can belong to only one _project_.
+
+## Authentication
+
+Authentication to the API is done using an API key which is unique for each client account. Please contact your administrator from Humans in the Loop in order to get your API key.
+
+The API key is provided as a header to each HTTP request in the following way:
+
+```bash
+> curl ... -H "Authorization: api_key YOUR_API_KEY" ...
+```
+
+## Endpoints
+
+### Health Check (`GET /v1/health`)
+
+Checks if the service is up and running. Can also be used to check if the provided API key is accepted.
+
+Example request:
+
+```bash
+> curl \
+    -H "Authorization: api_key YOUR_API_KEY" \
+    https://api.humansintheloop.org/v1/health
+```
+
+Response structure:
+
+```javascript
+{
+    "status": string  // "UP", "DOWN"
+}
+```
+
+### Project Create (`POST /v1/projects`)
+
+Creates a new project for the client account with the provided API key.
+
+When a new project is created, it initially has status `new`. This means that the project is not yet ready for use and cannot accept new jobs. The project needs to be activated by a Humans in the Loop administrator. The administrator will review the provided instructions file and setup the project. The project will be activated only after the administrator sets the status to `active`. The status of the project can be checked using the Project Status endpoint.
+
+Arguments:
+
+* `name` - Name of the project.
+* `instructions_file_url` - Publicly accessible URL containing a file with instructions for solving the jobs in this project. This file should also contain an example job with its input and expected result. The file will be downloaded during the processing of the request. It needs to be accessible only until the server creates the project and returns its ID. The extension of the instructions file can be one of the following: `pdf, docx, png, jpg, jpeg`.
+
+Example request:
+
+```bash
+> curl \
+    -d '{ \
+        "name": "test_project", \
+        "instructions_file_url": "https://example.test/instructions.pdf" \
+    }' \
+    -H "Authorization: api_key YOUR_API_KEY" \
+    -H "Content-Type: application/json" \
+    https://api.humansintheloop.org/v1/projects
+```
+
+Response structure:
+
+```javascript
+{
+    "id": string  // PROJECT_ID
+}
+```
+
+### Project Status (`GET /v1/projects/PROJECT_ID`)
+
+Checks the status of a project. The status of a project can be one of the following:
+
+* `new` - The project is not yet ready for use and cannot accept new jobs. The project needs to be activated by a Humans in the Loop administrator. The administrator will review the provided instructions file and setup the project. The project will be activated only after the administrator sets the status to `active`.
+* `active` - The project is ready for use and can accept new jobs.
+* `inactive` - The project cannot accept new jobs. The project can only be activated by a Humans in the Loop administrator.
+
+Example request:
+
+```bash
+> curl \
+    -H "Authorization: api_key YOUR_API_KEY" \
+    https://api.humansintheloop.org/v1/projects/PROJECT_ID
+```
+
+Response structure:
+
+```javascript
+{
+    "status": string  // "new", "active", "inactive"
+}
+```
+
+### Job Create (`POST /v1/jobs`)
+
+Creates a new job for the provided project.
+
+Arguments:
+
+* `project_id` - ID of the project.
+* `file_urls` - List of publicly accessible URLs containing one or more files related to one labeling job. The files will be downloaded during the processing of the request. They need to be accessible only until the server creates the job and returns its ID. The extension of the files can be one of the following: `pdf, png, jpg, jpeg`.
+* `predictions` (Optional) - A dictionary with predictions for the labeling job. The predictions are usually generated by a machine learning model. They are usually added to the job so that they can be verified and corrected by human workers. For example, polygons that need to be refined. The JSON structure of the predictions should be agreed upon creating the account.
+* `webhook_url` (Optional) - Publicly accessible URL that will be called when the job is completed. The URL will be called with a POST request containing the results of the job. The JSON structure of the results should be described in the project instructions file. The results will be the same as in the response of the Job Status endpoint.
+* `webhook_headers` (Optional) - Dictionary with headers that will be added to the webhook request. The headers are usually used for authentication to the webhook URL.
+* `expiration_minutes` (Optional) - Number of minutes after which the job will expire. The job will be not be available for labeling after it expires. If not provided, the job will never expire. Must be an integer between 1 and 1440 (24 hours).
+
+Example request:
+
+```bash
+> curl \
+    -d '{ \
+        "project_id": "PROJECT_ID", \
+        "file_urls": [ \
+            "https://example.test/file_1.png", \
+            "https://example.test/file_2.png" \
+        ], \
+        "predictions": { ... } \
+        "webhook_url": "https://example.test/webhook", \
+        "webhook_headers": { ... }, \
+        "expiration_minutes": 60 \
+    }' \
+    -H "Authorization: api_key YOUR_API_KEY" \
+    -H "Content-Type: application/json" \
+    https://api.humansintheloop.org/v1/jobs
+```
+
+Response structure:
+
+```javascript
+{
+    "job_id": string
+}
+```
+
+### Job Status (`GET /v1/jobs/PROJECT_ID/JOB_ID`)
+
+Polling endpoint for checking the status of a job. The status of a job can be one of the following:
+
+* `new` - The job was created but so far no human workers have started processing it.
+* `progress` - The job is currently being processed by human workers.
+* `done` - The job has been completed successfully.
+* `error` - The job was stopped due to a problem.
+* `canceled` - The job was canceled by the client.
+* `expired` - The job was not processed before it expired.
+
+Example request:
+
+```bash
+> curl \
+    -H "Authorization: api_key YOUR_API_KEY" \
+    https://api.humansintheloop.org/v1/jobs/PROJECT_ID/JOB_ID
+```
+
+Response structure:
+
+```javascript
+{
+    "project_id": string,  // PROJECT_ID
+    "job_id": string,  // JOB_ID
+    "create_date": string,  // ISO date and time when the job was created
+    "start_date": string,  // ISO date and time when the job was started by a worker
+    "finish_date": string,  // ISO date and time when the job was finished
+    "status": string,  // "new", "progress", "done", "error", "canceled", "expired"
+    "annotations": { ... },  // dictionary with annotation results as described in the project instructions
+    "image": "URL_TO_THE_IMAGE",  // URL to the image used for annotation
+    ("error": string)  // error message in case "status" == "error"
+}
+```
+
+The image URL provided in the data of the POST request points to the image file that was used during the annotation process. The URL requires an API key to access the file. The image can be accessed with the following command:
+
+```bash
+> curl \
+    -H "Authorization: api_key YOUR_API_KEY" \
+    --output PATH_TO_LOCAL_OUTPUT_FILE \
+    URL_TO_THE_IMAGE
+```
+
+### Job Cancel (`DELETE /v1/jobs/PROJECT_ID/JOB_ID`)
+
+Endpoint for canceling a job. The job can be canceled only if its status is `new` or `progress`.
+
+Example request:
+
+```bash
+> curl \
+    -X DELETE
+    -H "Authorization: api_key YOUR_API_KEY" \
+    https://api.humansintheloop.org/v1/jobs/PROJECT_ID/JOB_ID
+```
+
+Response structure:
+
+JOSN list of job status objects as described in the Job Status endpoint.
+
+### Bulk Jobs Status (`GET /v1/jobs/PROJECT_ID`)
+
+Endpoint for getting the status of all jobs in a project.
+
+Example request:
+
+```bash
+> curl \
+    -H "Authorization: api_key YOUR_API_KEY" \
+    https://api.humansintheloop.org/v1/jobs/PROJECT_ID
+```
+
+Response structure:
+
+JOSN list of job status objects as described in the Job Status endpoint.
+
+### Metrics (`GET /v1/metrics`)
+
+Endpoint for getting aggregated metrics about the jobs in the account. This endpoint can accept the following optional GET parameters:
+
+* `period_start_date` - If provided, metrics will be returned only for the jobs that were started on or after the provided date.
+* `period_end_date` - If provided, metrics will be returned only for the jobs that were started strictly before the provided date.
+* `period_group_level` -  Time aggregation level of the metrics. Can be `day`, `week`, `month`, or `year`. Default is `month`.
+* `project_ids` - Comma separated list of project IDs to select the metrics for. If not provided, all projects of the account will be selected.
+
+Example request:
+
+```bash
+> curl \
+    -H "Authorization: api_key YOUR_API_KEY" \
+    https://api.humansintheloop.org/v1/metrics\?period_group_level=week\&period_start_date=2023-01-01\&period_end_date=2023-04-01\&project_ids=PROJECT_ID_1,PROJECT_ID_2
+```
+
+Response structure:
+
+```javascript
+{
+    [  // list of selected projects in the account
+        {
+            "project_id": string,
+            "project_name": string,
+            "period_start_date": string, // ISO date of the first day of the period
+            "period_end_date": string,  // ISO date of the day after the last day of the period
+            "period_group_level": string,  // aggregation level of the metrics
+            "metrics": [  // list of period groups with metrics
+                {
+                    "period_group_start": string,  // ISO date of the start of the period group
+                    "jobs_all": int,  // total number of jobs
+                    "jobs_done": int,  // number of jobs that have been completed successfully
+                    "jobs_new": int,  // number of jobs that have not been started yet
+                    "jobs_progress": int,  // number of jobs that are currently being processed
+                    "jobs_error": int,  // number of jobs that have been stopped due to a problem
+                    "jobs_expired": int,  // number of jobs that have not been processed before they expired
+                    "jobs_canceled": int,  // number of jobs that have been canceled
+                    "min_seconds_to_finish_job": int,  // minimum number of seconds it took to complete a job (difference between start_date and finish_date; applies only for "done" jobs)
+                    "min_job_lifespan_seconds": int,  // minimum number of seconds when the job is available for processing (difference between create_date and finish_date; applies only for "done" jobs)
+                    "max_seconds_to_finish_job": int,  // maximum number of seconds it took to complete a job (difference between start_date and finish_date; applies only for "done" jobs)
+                    "max_job_lifespan_seconds": int,  // maximum number of seconds when the job is available for processing (difference between create_date and finish_date; applies only for "done" jobs)
+                    "avg_seconds_to_finish_job": int,  // average number of seconds it took to complete a job (difference between start_date and finish_date; applies only for "done" jobs)
+                    "avg_job_lifespan_seconds": int  // average number of seconds when the job is available for processing (difference between create_date and finish_date; applies only for "done" jobs)
+                },
+                ...
+            ]
+        },
+        ...
+    ]
+}
+```
+
+### Static Egress IP (`GET /v1/ip`)
+
+The API server has a static egress IP address that can be used to whitelist the API server in firewalls. The IP address is returned by calling this endpoint.
+
+Example request:
+
+```bash
+> curl \
+    -H "Authorization: api_key YOUR_API_KEY" \
+    https://api.humansintheloop.org/v1/ip
+```
+
+Response structure: Plain text of the IP address.
+
