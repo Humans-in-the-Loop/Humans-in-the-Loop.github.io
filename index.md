@@ -3,9 +3,8 @@
 # To modify the layout, see https://jekyllrb.com/docs/themes/#overriding-theme-defaults
 
 layout: home
+title: API Documentation (v1.1.23)
 ---
-
-# API Documentation (v1.1.23)
 
 This API allows clients to send requests for labeling services by Humans in the Loop.
 
