@@ -145,7 +145,7 @@ Example request:
         "webhook_url": "https://example.test/webhook", \
         "webhook_headers": { ... }, \
         "priority":"PRIORITY_VALUE",
-        "ai_response": { ...}  example:{"results": "H136", "trailer_type": "DRY_VAN"} \
+        "ai_response": { ...}  example:{"results": "EDGE_CASE", "image_type": "DARK"} \
     }' \
     -H "Authorization: api_key YOUR_API_KEY" \
     -H "Content-Type: application/json" \
